@@ -1,34 +1,50 @@
 import os
-from fastapi import FastAPI, Request, Response
+import json
+import requests
+from google import genai
 from dotenv import load_dotenv
-import uvicorn
 
-# Load variables from .env file
+# Load environment variables
 load_dotenv()
 
-app = FastAPI()
+# Initialize Gemini client
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Retrieve credentials securely from environment variables
-LEMINA_API_KEY = os.getenv("LEMINA_API_KEY")
+# Read data from input.json created by test-number.py
+if not os.path.exists("input.json"):
+    print("Error: input.json not found.")
+    exit(1)
 
-@app.post("/webhook")
-async def receive_message(request: Request):
-    """Triggers whenever anyone messages via LeminaAI."""
-    try:
-        body = await request.json()
-        print("Received webhook payload:", body)
-        
-        # Extract sender and message body from payload structure
-        sender_phone = body.get("from") or body.get("sender") or body.get("phone")
-        message_body = body.get("message") or body.get("text") or body.get("body")
-        
-        if message_body:
-            print(f"Triggered! Message from {sender_phone}: {message_body}")
-            
-        return Response(status_code=200)
-    except Exception as e:
-        print(f"Error processing webhook: {e}")
-        return Response(status_code=500)
+with open("input.json", "r") as f:
+    data = json.load(f)
 
-if __name__ == "__main__":
-    uvicorn.run("input", host="0.0.0.0", port=8000, reload=True)
+sender_phone = data.get("sender")
+message_body = data.get("message")
+
+if message_body and sender_phone:
+    print(f"Processing message for {sender_phone}: {message_body}")
+
+    # Generate response using Gemini AI agent
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=f"You are a helpful dental clinic AI assistant. Respond to this patient message professionally and concisely: {message_body}"
+    )
+    ai_reply = response.text
+    print(f"Generated AI Reply: {ai_reply}")
+
+    # Send reply back via LeminAI WhatsApp API
+    lemina_api_key = os.getenv("LEMINA_API_KEY")
+    headers = {
+        "Authorization": f"Bearer {lemina_api_key}",
+        "Content-Type": "application/json"
+    }
+    send_payload = {
+        "to": sender_phone,
+        "message": ai_reply
+    }
+    
+    # Send the request to WhatsApp via LeminAI
+    response_api = requests.post("https://api.leminai.com/v1/messages", json=send_payload, headers=headers)
+    print("Sent to WhatsApp status:", response_api.status_code)
+else:
+    print("Invalid data inside input.json")
