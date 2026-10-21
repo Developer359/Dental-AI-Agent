@@ -29,7 +29,7 @@ if sender_phone and ai_reply:
     }
     
     # Send response back to WhatsApp via LeminAI API
-    response_api = requests.post("https://api.leminai.com/v1/messages", json=send_payload, headers=headers)
+    response_api = requests.post("https://api.leminai.com/api/v1/messages/service", json=send_payload, headers=headers)
     print("Sent to WhatsApp status:", response_api.status_code)
 else:
     print("Missing sender or reply content.")
