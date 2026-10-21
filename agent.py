@@ -49,13 +49,15 @@ headers = {
 }
 
 send_payload = {
-    "phone": sender_phone,
+    "to": sender_phone,
     "type": "text",
-    "message": ai_reply
+    "text": {
+        "body": ai_reply
+    }
 }
 
 response_api = requests.post(
-    "https://api.leminai.com/api/v1/messages/service", 
+    "https://app.leminai.com/api/v1/messages/service", 
     json=send_payload, 
     headers=headers
 )
