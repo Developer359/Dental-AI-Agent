@@ -1,0 +1,30 @@
+name: Dental AI Agent WhatsApp Responder
+
+on:
+  repository_dispatch:
+    types: [whatsapp_message]
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests google-genai python-dotenv
+
+      - name: Run Test Number & Trigger Workflow
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LEMINA_API_KEY: ${{ secrets.LEMINA_API_KEY }}
+          ALLOWED_NUMBERS: ${{ secrets.ALLOWED_NUMBERS }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          python test-number.py
