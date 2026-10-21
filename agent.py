@@ -4,47 +4,61 @@ import requests
 from google import genai
 from dotenv import load_dotenv
 
-# Load variables from .env file
+# 1. Load environment variables
 load_dotenv()
 
-# Initialize Gemini client using the official Google GenAI SDK
+# 2. Check allowed numbers
+allowed_env = os.getenv("ALLOWED_NUMBERS", "")
+ALLOWED_NUMBERS = [num.strip() for num in allowed_env.split(",") if num.strip()]
+
+raw_payload = os.getenv("EVENT_PAYLOAD", "{}")
+try:
+    payload = json.loads(raw_payload)
+except json.JSONDecodeError:
+    payload = {}
+
+sender_phone = str(payload.get("from") or payload.get("sender") or payload.get("phone") or "").strip()
+message_body = payload.get("message") or payload.get("text") or payload.get("body")
+
+# If message structure is nested (like LeminAI standard format)
+if not message_body and "text" in payload:
+    message_body = payload["text"].get("body")
+
+is_allowed = any(sender_phone.endswith(allowed) or allowed.endswith(sender_phone) for allowed in ALLOWED_NUMBERS)
+
+if not is_allowed:
+    print(f"Skipping: Sender {sender_phone} is not authorized.")
+    exit(0)
+
+print(f"Authorized trigger from {sender_phone}: {message_body}")
+
+# 3. Generate response using Gemini AI agent
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=f"You are a helpful dental clinic AI assistant. Respond to this patient message professionally and concisely: {message_body}"
+)
+ai_reply = response.text
+print(f"Generated AI Reply: {ai_reply}")
 
-# Read message data from input.json created by test-number.py
-if not os.path.exists("input.json"):
-    print("Error: input.json not found.")
-    exit(1)
+# 4. Send reply back via LeminAI WhatsApp API immediately
+lemina_api_key = os.getenv("LEMINA_API_KEY")
+headers = {
+    "Authorization": f"Bearer {lemina_api_key}",
+    "Content-Type": "application/json"
+}
 
-with open("input.json", "r") as f:
-    data = json.load(f)
+send_payload = {
+    "phone": sender_phone,
+    "type": "text",
+    "message": ai_reply
+}
 
-sender_phone = data.get("sender")
-message_body = data.get("message")
+response_api = requests.post(
+    "https://api.leminai.com/api/v1/messages/service", 
+    json=send_payload, 
+    headers=headers
+)
 
-if message_body and sender_phone:
-    print(f"Processing message for {sender_phone}: {message_body}")
-
-    # Generate response using Gemini AI agent
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=f"You are a helpful dental clinic AI assistant. Respond to this patient message professionally and concisely: {message_body}"
-    )
-    ai_reply = response.text
-    print(f"Generated AI Reply: {ai_reply}")
-
-    # Send reply back via LeminAI WhatsApp API
-    lemina_api_key = os.getenv("LEMINA_API_KEY")
-    headers = {
-        "Authorization": f"Bearer {lemina_api_key}",
-        "Content-Type": "application/json"
-    }
-    send_payload = {
-        "to": sender_phone,
-        "message": ai_reply
-    }
-    
-    # Send response to WhatsApp
-    response_api = requests.post("https://api.leminai.com/v1/messages", json=send_payload, headers=headers)
-    print("Sent to WhatsApp status:", response_api.status_code)
-else:
-    print("Invalid data inside input.json")
+print("Sent to WhatsApp status:", response_api.status_code)
+print("Response text:", response_api.text)

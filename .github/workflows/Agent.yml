@@ -20,11 +20,11 @@ jobs:
         run: |
           pip install requests google-genai python-dotenv
 
-      - name: Run Dental AI Pipeline
+      - name: Run Dental AI Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LEMINA_API_KEY: ${{ secrets.LEMINA_API_KEY }}
           ALLOWED_NUMBERS: ${{ secrets.ALLOWED_NUMBERS }}
           EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          python test-number.py
+          python agent.py
