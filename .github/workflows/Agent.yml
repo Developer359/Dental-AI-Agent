@@ -20,7 +20,7 @@ jobs:
         run: |
           pip install requests google-genai python-dotenv
 
-      - name: Run Test Number & Trigger Workflow
+      - name: Run Dental AI Pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LEMINA_API_KEY: ${{ secrets.LEMINA_API_KEY }}
