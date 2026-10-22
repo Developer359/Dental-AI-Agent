@@ -1,6 +1,6 @@
 <div align="center">
 
-![Dental AI Agent](banner.png)
+<img src="banner.png" alt="Dental AI Agent" width="1200" height="300">
 
 # 🦷 Dental AI Agent
 
