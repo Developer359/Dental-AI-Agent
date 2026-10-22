@@ -136,6 +136,7 @@ The agent collects exactly **4 fields** — and only asks for what is still miss
 │                    └─────────────────┘                  │
 └─────────────────────────────────────────────────────────┘
 ```
+<img width="1058" height="529" alt="image" src="https://github.com/user-attachments/assets/0e09f536-fbf9-406c-9473-050b53517daa" />
 
 ---
 
