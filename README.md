@@ -378,7 +378,7 @@ For testing locally:
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/Dental-AI-Agent.git
+git clone https://github.com/Developer359/Dental-AI-Agent.git
 cd Dental-AI-Agent
 
 # Install dependencies
