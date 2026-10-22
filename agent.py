@@ -97,7 +97,7 @@ def slot_available(date_str, time_str):
                     "select": "id"},
             timeout=10
         )
-        print(f"Availability check → {r.status_code}: {r.text}")
+        print(f"Availability check >> {r.status_code}: {r.text}")
         return len(r.json()) == 0 if r.status_code == 200 else None
     except Exception as e:
         print(f"Availability error: {e}")
@@ -112,7 +112,7 @@ def insert_booking(name, phone, issue, date_str, time_str):
                   "appointment_time": time_str, "status": "pending"},
             headers=SB_HDR, timeout=15
         )
-        print(f"Insert → {r.status_code}: {r.text}")
+        print(f"Insert >> {r.status_code}: {r.text}")
         if r.status_code in [200, 201]:
             data = r.json()
             return True, data[0].get("id", "?") if data else "?"
@@ -175,7 +175,7 @@ contents.append({"role": "user", "parts": [{"text": message_body}]})
 # 8. Call Gemini
 # ─────────────────────────────────────────────
 client   = genai.Client(api_key=GEMINI_API_KEY)
-response = client.models.generate_content(model="gemini-2.5-flash", contents=contents)
+response = client.models.generate_content(model="gemini-3.1-flash-lite", contents=contents)
 ai_reply = response.text.strip()
 print(f"AI reply:\n{ai_reply}")
 
@@ -189,7 +189,7 @@ if update_match:
         for field, value in updates.items():
             if value and field in draft:
                 draft[field] = str(value).strip()
-                print(f"  Draft ← {field} = {draft[field]}")
+                print(f"  Draft << {field} = {draft[field]}")
     except Exception as e:
         print(f"UPDATE parse error: {e}")
     ai_reply = re.sub(r'\[UPDATE:\s*\{.*?\}\]', '', ai_reply, flags=re.DOTALL).strip()
@@ -259,4 +259,4 @@ wa_res = requests.post(
     json={"to": sender_phone, "type": "text", "text": {"body": final_reply}},
     headers={"Authorization": f"Bearer {LEMINA_API_KEY}", "Content-Type": "application/json"},
 )
-print(f"WhatsApp → {wa_res.status_code}: {wa_res.text}")
+print(f"WhatsApp >> {wa_res.status_code}: {wa_res.text}")
