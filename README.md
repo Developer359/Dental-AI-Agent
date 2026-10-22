@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="banner.png" alt="Dental AI Agent" width="1200" height="300">
-
 # 🦷 Dental AI Agent
 
 ### WhatsApp-Powered Dental Appointment Booking with AI
@@ -55,8 +53,7 @@
 ---
 
 ## ⚙️ How It Works
-
-![Flow Diagram](flow.png)
+<img src="flow.png" alt="Flow Diagram" width="800" height="500">
 
 ### Step-by-Step Flow
 
