@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import requests
 from google import genai
 from dotenv import load_dotenv
@@ -20,7 +21,6 @@ except json.JSONDecodeError:
 sender_phone = str(payload.get("from") or payload.get("sender") or payload.get("phone") or "").strip()
 message_body = payload.get("message") or payload.get("text") or payload.get("body")
 
-# If message structure is nested (like LeminAI standard format)
 if not message_body and "text" in payload:
     message_body = payload["text"].get("body")
 
@@ -32,56 +32,81 @@ if not is_allowed:
 
 print(f"Authorized trigger from {sender_phone}: {message_body}")
 
-# --- Cal.com Slot Checker Function ---
+# --- Cal.com Configuration ---
+CAL_API_KEY = os.getenv("CAL_API_KEY")
+CAL_EVENT_TYPE_ID = 7589533  # Dental Consultation event type ID
+
+# Parse FULL_SLUG: strip full URL if accidentally set in .env
+FULL_SLUG = os.getenv("CAL_EVENT_SLUG", "muhammad-subhan-8fudky/dental-consultation")
+FULL_SLUG = re.sub(r'^https?://cal\.com/', '', FULL_SLUG)  # Remove URL prefix if present
+
+# Extract username and eventTypeSlug
+if "/" in FULL_SLUG:
+    CAL_USERNAME, CAL_EVENT_SLUG = FULL_SLUG.split("/", 1)
+else:
+    CAL_USERNAME = "muhammad-subhan-8fudky"
+    CAL_EVENT_SLUG = FULL_SLUG
+
+# --- Helper: Fetch Slots ---
 def get_cal_available_slots():
-    cal_api_key = os.getenv("CAL_API_KEY")
-    cal_event_slug = os.getenv("CAL_EVENT_SLUG", "muhammad-subhan-8fudky/dental-consultation")
-    if not cal_api_key:
+    if not CAL_API_KEY:
         return "Clinic Schedule: Open Monday to Saturday, 9:00 AM to 5:00 PM (Closed Sundays)."
     try:
-        url = f"https://api.cal.com/v2/slots?eventTypeSlug={cal_event_slug}"
+        url = f"https://api.cal.com/v2/slots?eventTypeId={CAL_EVENT_TYPE_ID}&username={CAL_USERNAME}"
         headers = {
-            "Authorization": f"Bearer {cal_api_key}",
+            "Authorization": f"Bearer {CAL_API_KEY}",
             "cal-api-version": "2024-09-04"
         }
         res = requests.get(url, headers=headers, timeout=10)
+        print(f"Cal.com Slots Status: {res.status_code}")
         if res.status_code == 200:
             return json.dumps(res.json())
+        print(f"Cal.com Slots Error: {res.text}")
         return "Clinic Schedule: Open Monday to Saturday, 9:00 AM to 5:00 PM (Closed Sundays)."
     except Exception as e:
         print(f"Error checking Cal.com slots: {e}")
         return "Clinic Schedule: Open Monday to Saturday, 9:00 AM to 5:00 PM (Closed Sundays)."
 
-# --- Cal.com Create Booking Function ---
-def book_cal_appointment(start_time, attendee_name, attendee_email, description):
-    cal_api_key = os.getenv("CAL_API_KEY")
-    cal_event_slug = os.getenv("CAL_EVENT_SLUG", "muhammad-subhan-8fudky/dental-consultation")
-    if not cal_api_key:
+# --- Helper: Create Booking on Cal.com ---
+def book_cal_appointment(start_time, attendee_name, description):
+    if not CAL_API_KEY:
+        print("Error: CAL_API_KEY is missing.")
         return False
     try:
         url = "https://api.cal.com/v2/bookings"
         headers = {
-            "Authorization": f"Bearer {cal_api_key}",
+            "Authorization": f"Bearer {CAL_API_KEY}",
             "Content-Type": "application/json",
-            "cal-api-version": "2024-09-04"
+            "cal-api-version": "2024-08-13"  # Correct version for bookings endpoint
         }
+        # Build a clean email from the phone number
+        clean_phone = re.sub(r'[^0-9]', '', sender_phone)
+        attendee_email = f"patient.{clean_phone}@whatsapp.dental"
+
         booking_payload = {
+            "eventTypeId": CAL_EVENT_TYPE_ID,  # Use numeric ID — required by Cal.com v2
             "start": start_time,
-            "eventTypeId": cal_event_slug,
             "attendee": {
                 "name": attendee_name,
                 "email": attendee_email,
-                "timeZone": "Asia/Karachi"
+                "timeZone": "Asia/Karachi",
+                "language": "en"
             },
-            "responses": {
+            "bookingFieldsResponses": {
                 "notes": description
+            },
+            "metadata": {
+                "source": "whatsapp-ai-agent",
+                "phone": sender_phone
             }
         }
-        res = requests.post(url, json=booking_payload, headers=headers, timeout=10)
-        print("Cal.com Booking Response:", res.status_code, res.text)
+        print(f"Cal.com Booking Payload: {json.dumps(booking_payload, indent=2)}")
+        res = requests.post(url, json=booking_payload, headers=headers, timeout=15)
+        print("Cal.com Booking Response Status:", res.status_code)
+        print("Cal.com Response Body:", res.text)
         return res.status_code in [200, 201]
     except Exception as e:
-        print(f"Error creating booking: {e}")
+        print(f"Error creating Cal.com booking: {e}")
         return False
 
 slots_info = get_cal_available_slots()
@@ -90,21 +115,21 @@ slots_info = get_cal_available_slots()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 system_instruction = f"""
-You are a professional dental clinic AI assistant.
+You are an automated dental clinic assistant on WhatsApp.
 
-CLINIC OPERATING HOURS:
-- Monday to Saturday: 9:00 AM to 5:00 PM
-- Sunday: CLOSED
+CLINIC HOURS:
+- Mon - Sat: 9:00 AM - 5:00 PM (Asia/Karachi)
+- Sun: CLOSED
 
-AVAILABLE CALENDAR SLOTS DATA:
+AVAILABLE SLOTS DATA:
 {slots_info}
 
 INSTRUCTIONS:
-1. If the patient asks for available slots, show them valid options.
-2. Once they select a slot, ask for their **Full Name** and **Dental Issue/Problem**.
-3. Once you have collected the Full Name, Dental Issue, Date, and Time, output a JSON block at the very end of your message in this exact format so the script can book it:
-[BOOKING: {{"name": "Full Name", "issue": "Dental Problem", "datetime": "YYYY-MM-DDTHH:MM:SSZ"}}]
-Then write a friendly confirmation message to the patient.
+1. If patient asks for available slots, list them clearly.
+2. If patient selects a time, ask for their Full Name and Dental Problem.
+3. When you have ALL 4 required pieces (Full Name, Dental Problem, Date, and Time), append this exact trigger tag at the bottom of your response:
+[BOOKING: {{"name": "Full Name", "issue": "Dental Issue", "datetime": "YYYY-MM-DDTHH:MM:SSZ"}}]
+Example datetime format: "2026-10-23T10:00:00Z"
 """
 
 response = client.models.generate_content(
@@ -112,31 +137,33 @@ response = client.models.generate_content(
     contents=f"{system_instruction}\n\nPatient Message: {message_body}"
 )
 ai_reply = response.text
-print(f"Generated AI Reply: {ai_reply}")
+print(f"Generated AI Reply:\n{ai_reply}")
 
-# Check if Gemini outputted a booking instruction block
+# Check for booking trigger tag
 if "[BOOKING:" in ai_reply:
     try:
-        import re
-        json_str = re.search(r'\[BOOKING:\s*(\{.*?\})\]', ai_reply).group(1)
-        booking_data = json.loads(json_str)
-        
-        # Perform actual API booking on Cal.com
-        success = book_cal_appointment(
-            start_time=booking_data.get("datetime"),
-            attendee_name=booking_data.get("name"),
-            attendee_email=f"{sender_phone}@whatsapp.com", # placeholder email for WhatsApp user
-            description=f"Dental Issue: {booking_data.get('issue')} | Phone: {sender_phone}"
-        )
-        if success:
-            print("Appointment successfully booked in Cal.com!")
-        
-        # Clean up the AI reply text to remove the raw booking JSON block before sending to WhatsApp
-        ai_reply = re.sub(r'\[BOOKING:\s*\{.*?\}]', '', ai_reply).strip()
+        json_match = re.search(r'\[BOOKING:\s*(\{.*?\}|\{.*?\n.*?\})\]', ai_reply, re.DOTALL)
+        if json_match:
+            booking_data = json.loads(json_match.group(1))
+            
+            # Execute Cal.com Booking
+            success = book_cal_appointment(
+                start_time=booking_data.get("datetime"),
+                attendee_name=booking_data.get("name"),
+                description=f"Dental Issue: {booking_data.get('issue')} | Phone: {sender_phone}"
+            )
+            
+            if success:
+                print(">>> SUCCESS: Appointment created on Cal.com dashboard!")
+            else:
+                print(">>> WARNING: Cal.com API call failed. Check log details above.")
+            
+            # Remove raw json block before sending to patient
+            ai_reply = re.sub(r'\[BOOKING:\s*\{.*?\}\]', '', ai_reply, flags=re.DOTALL).strip()
     except Exception as e:
-        print(f"Failed to parse or execute booking block: {e}")
+        print(f"Failed to process booking JSON tag: {e}")
 
-# 4. Send reply back via LeminAI WhatsApp API immediately
+# 4. Send reply back via LeminAI WhatsApp API
 lemina_api_key = os.getenv("LEMINA_API_KEY")
 headers = {
     "Authorization": f"Bearer {lemina_api_key}",
