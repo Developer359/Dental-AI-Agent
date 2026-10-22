@@ -52,7 +52,38 @@ def get_cal_available_slots():
         print(f"Error checking Cal.com slots: {e}")
         return "Clinic Schedule: Open Monday to Saturday, 9:00 AM to 5:00 PM (Closed Sundays)."
 
-# Fetch available slots from Cal.com
+# --- Cal.com Create Booking Function ---
+def book_cal_appointment(start_time, attendee_name, attendee_email, description):
+    cal_api_key = os.getenv("CAL_API_KEY")
+    cal_event_slug = os.getenv("CAL_EVENT_SLUG", "muhammad-subhan-8fudky/dental-consultation")
+    if not cal_api_key:
+        return False
+    try:
+        url = "https://api.cal.com/v2/bookings"
+        headers = {
+            "Authorization": f"Bearer {cal_api_key}",
+            "Content-Type": "application/json",
+            "cal-api-version": "2024-09-04"
+        }
+        booking_payload = {
+            "start": start_time,
+            "eventTypeId": cal_event_slug,
+            "attendee": {
+                "name": attendee_name,
+                "email": attendee_email,
+                "timeZone": "Asia/Karachi"
+            },
+            "responses": {
+                "notes": description
+            }
+        }
+        res = requests.post(url, json=booking_payload, headers=headers, timeout=10)
+        print("Cal.com Booking Response:", res.status_code, res.text)
+        return res.status_code in [200, 201]
+    except Exception as e:
+        print(f"Error creating booking: {e}")
+        return False
+
 slots_info = get_cal_available_slots()
 
 # 3. Generate response using Gemini AI agent
@@ -68,17 +99,12 @@ CLINIC OPERATING HOURS:
 AVAILABLE CALENDAR SLOTS DATA:
 {slots_info}
 
-INSTRUCTIONS FOR INTENT HANDLING:
-1. **General Information Query:**
-   If the patient is asking general dental questions, clinic location, or general information, answer professionally, concisely, and directly.
-
-2. **Appointment Booking Request:**
-   If the patient wants to book an appointment:
-   - Step 1: Check available slots above. Tell them available dates/times between Monday-Saturday (9:00 AM to 5:00 PM). Never offer Sundays or times outside 9:00 AM - 5:00 PM.
-   - Step 2: Once they select a slot, ask for their **Full Name** and **Dental Issue/Problem**.
-   - Step 3: When Full Name, Dental Issue, Date, and Time are provided, confirm that their appointment request is recorded with status **Pending**.
-
-Patient Phone Number: {sender_phone}
+INSTRUCTIONS:
+1. If the patient asks for available slots, show them valid options.
+2. Once they select a slot, ask for their **Full Name** and **Dental Issue/Problem**.
+3. Once you have collected the Full Name, Dental Issue, Date, and Time, output a JSON block at the very end of your message in this exact format so the script can book it:
+[BOOKING: {{"name": "Full Name", "issue": "Dental Problem", "datetime": "YYYY-MM-DDTHH:MM:SSZ"}}]
+Then write a friendly confirmation message to the patient.
 """
 
 response = client.models.generate_content(
@@ -87,6 +113,28 @@ response = client.models.generate_content(
 )
 ai_reply = response.text
 print(f"Generated AI Reply: {ai_reply}")
+
+# Check if Gemini outputted a booking instruction block
+if "[BOOKING:" in ai_reply:
+    try:
+        import re
+        json_str = re.search(r'\[BOOKING:\s*(\{.*?\})\]', ai_reply).group(1)
+        booking_data = json.loads(json_str)
+        
+        # Perform actual API booking on Cal.com
+        success = book_cal_appointment(
+            start_time=booking_data.get("datetime"),
+            attendee_name=booking_data.get("name"),
+            attendee_email=f"{sender_phone}@whatsapp.com", # placeholder email for WhatsApp user
+            description=f"Dental Issue: {booking_data.get('issue')} | Phone: {sender_phone}"
+        )
+        if success:
+            print("Appointment successfully booked in Cal.com!")
+        
+        # Clean up the AI reply text to remove the raw booking JSON block before sending to WhatsApp
+        ai_reply = re.sub(r'\[BOOKING:\s*\{.*?\}]', '', ai_reply).strip()
+    except Exception as e:
+        print(f"Failed to parse or execute booking block: {e}")
 
 # 4. Send reply back via LeminAI WhatsApp API immediately
 lemina_api_key = os.getenv("LEMINA_API_KEY")
