@@ -10,7 +10,7 @@
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Serverless-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Messaging-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com)
 
-> **A fully serverless, AI-powered dental clinic assistant that automatically handles WhatsApp appointment bookings — no server required, runs 100% free on GitHub Actions.**
+> **A fully serverless, AI-powered dental clinic assistant that automatically handles the WhatsApp appointment bookings — no server required, runs 100% free on GitHub Actions.**
 
 </div>
 
