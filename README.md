@@ -2,7 +2,7 @@
 
 # 🦷 Dental AI Agent
 
-### WhatsApp-Powered Dental Appointment Booking with AI
+### WhatsApp-Powered Dental Appointment Booking with the AI
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Gemini AI](https://img.shields.io/badge/Gemini-3.1_Flash_Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
